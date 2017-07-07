@@ -267,7 +267,7 @@ def binary_grid_VH(np.ndarray[np.int32_t, ndim=3, mode='c'] unary_cost,
 def alpha_expansion_grid(np.ndarray[np.int32_t, ndim=3, mode='c'] unary_cost,
                          np.ndarray[np.int32_t, ndim=2, mode='c']
                          pairwise_cost, int n_iter=3, verbose=0,
-                         random_seed=None):
+                         random_seed=None, truncate=False):
     """Alpha expansion using QPBO inference on a 2d grid.
     
     Pairwise potentials are the same for all edges.
@@ -292,6 +292,9 @@ def alpha_expansion_grid(np.ndarray[np.int32_t, ndim=3, mode='c'] unary_cost,
     random_seed: int or None
         If int, a fixed random seed is used for reproducable results.
 
+    truncate: bool, default=False
+        Instead of using qpbo, truncate non-submodular weights (truncated graph cuts).
+
     Returns
     -------
     result : nd-array, shape=(height, width)
@@ -311,6 +314,7 @@ def alpha_expansion_grid(np.ndarray[np.int32_t, ndim=3, mode='c'] unary_cost,
     cdef int node_id
     cdef int node_label
     cdef int e00, e01, e10, e11
+    cdef int submodularity, quarter, rest
 
     if (pairwise_cost != pairwise_cost.T).any():
         raise ValueError("pairwise_cost must be symmetric.")
@@ -353,15 +357,28 @@ def alpha_expansion_grid(np.ndarray[np.int32_t, ndim=3, mode='c'] unary_cost,
                         q.AddUnaryTerm(node_id, data_ptr_current[node_label], 100000)
                     else:
                         q.AddUnaryTerm(node_id, data_ptr_current[node_label], data_ptr_current[alpha])
-                    e01 = pairwise_cost[node_label, alpha]
-                    e11 = pairwise_cost[alpha, alpha]
                     if i < h - 1:
+                        e01 = pairwise_cost[node_label, alpha]
+                        e11 = pairwise_cost[alpha, alpha]
                         #down
                         e00 = pairwise_cost[node_label, x_ptr_current[w]]
                         e10 = pairwise_cost[alpha, x_ptr_current[w]]
 
+                        if truncate:
+                            submodularity = e01 + e10 - e00 - e11
+                            if submodularity < 0:
+                                 # one possible truncation scheme
+                                 # see article: Digital Tapestry
+                                 quarter = submodularity // 4
+                                 rest = submodularity - 2 * quarter
+                                 e10 -= quarter
+                                 e01 -= quarter
+                                 e00 += rest
+
                         q.AddPairwiseTerm(node_id, node_id + w, e00, e01, e10, e11)
                     if j < w - 1:
+                        e01 = pairwise_cost[node_label, alpha]
+                        e11 = pairwise_cost[alpha, alpha]
                         #right
                         e00 = pairwise_cost[node_label, x_ptr_current[1]]
                         e10 = pairwise_cost[alpha, x_ptr_current[1]]
@@ -393,7 +410,7 @@ def alpha_expansion_graph(np.ndarray[np.int32_t, ndim=2, mode='c'] edges,
                           np.ndarray[np.int32_t, ndim=2, mode='c'] unary_cost,
                           np.ndarray[np.int32_t, ndim=2, mode='c']
                           pairwise_cost, int n_iter=5, verbose=False,
-                          random_seed=None):
+                          random_seed=None, truncate=False):
     """Alpha expansion using QPBO inference on general graph.
     
     Pairwise potentials are the same for all edges.
@@ -421,6 +438,9 @@ def alpha_expansion_graph(np.ndarray[np.int32_t, ndim=2, mode='c'] edges,
 
     random_seed: int or None
         If int, a fixed random seed is used for reproducable results.
+    
+    truncate: bool, default=False
+        Instead of using qpbo, truncate non-submodular weights (truncated graph cuts).
 
     Returns
     -------
@@ -438,6 +458,7 @@ def alpha_expansion_graph(np.ndarray[np.int32_t, ndim=2, mode='c'] edges,
     cdef int label
     cdef int changes
     cdef int e00, e01, e10, e11
+    cdef int submodularity, quarter, rest
     cdef int edge0, edge1
 
     if (pairwise_cost != pairwise_cost.T).any():
@@ -482,6 +503,16 @@ def alpha_expansion_graph(np.ndarray[np.int32_t, ndim=2, mode='c'] edges,
                 e01 = pairwise_cost[x_ptr[edge0], alpha]
                 e10 = pairwise_cost[alpha, x_ptr[edge1]]
                 e11 = pairwise_cost[alpha, alpha]
+                if truncate:
+                    submodularity = e01 + e10 - e00 - e11
+                    if submodularity < 0:
+                         # one possible truncation scheme
+                         # see article: Digital Tapestry
+                         quarter = submodularity // 4
+                         rest = submodularity - 2 * quarter
+                         e10 -= quarter
+                         e01 -= quarter
+                         e00 += rest
                 q.AddPairwiseTerm(edge0, edge1, e00, e01, e10, e11)
 
             q.Solve()
@@ -512,7 +543,7 @@ def alpha_expansion_general_graph(
         np.ndarray[np.int32_t, ndim=2, mode='c'] edges,
         np.ndarray[np.int32_t, ndim=2, mode='c'] unary_cost,
         np.ndarray[np.int32_t, ndim=3, mode='c'] edge_costs,
-        int n_iter=5, verbose=False, random_seed=None):
+        int n_iter=5, verbose=False, random_seed=None, truncate=False):
     """Alpha expansion using QPBO inference on general graph.
     
     Pairwise potentials can be arbitrary, given by edge_costs.
@@ -542,6 +573,9 @@ def alpha_expansion_general_graph(
 
     random_seed: int or None
         If int, a fixed random seed is used for reproducable results.
+    
+    truncate: bool, default=False
+        Instead of using qpbo, truncate non-submodular weights (truncated graph cuts).
 
     Returns
     -------
@@ -559,6 +593,7 @@ def alpha_expansion_general_graph(
     cdef int label
     cdef int changes
     cdef int e00, e01, e10, e11
+    cdef int submodularity, quarter, rest
     cdef int edge0, edge1
 
     if random_seed is None:
@@ -601,6 +636,16 @@ def alpha_expansion_general_graph(
                 e01 = edge_costs[e, x_ptr[edge0], alpha]
                 e10 = edge_costs[e, alpha, x_ptr[edge1]]
                 e11 = edge_costs[e, alpha, alpha]
+                if truncate:
+                    submodularity = e01 + e10 - e00 - e11
+                    if submodularity < 0:
+                         # one possible truncation scheme
+                         # see article: Digital Tapestry
+                         quarter = submodularity // 4
+                         rest = submodularity - 2 * quarter
+                         e10 -= quarter
+                         e01 -= quarter
+                         e00 += rest
                 q.AddPairwiseTerm(edge0, edge1, e00, e01, e10, e11)
 
             q.Solve()
