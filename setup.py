@@ -3,6 +3,7 @@ import tarfile
 from distutils.core import setup, Extension
 from distutils.command.build_ext import build_ext
 import numpy as np
+from Cython.Build import cythonize
 
 
 class QPBOInstall(build_ext):
@@ -28,7 +29,7 @@ files = ["QPBO.cpp", "QPBO_extra.cpp", "QPBO_maxflow.cpp",
          "QPBO_postprocessing.cpp"]
 
 files = [os.path.join(qpbo_directory, f) for f in files]
-files.insert(0, "src/pyqpbo.cpp")
+files.insert(0, "src/pyqpbo.pyx")
 
 setup(name='pyqpbo',
       packages=['pyqpbo'],
@@ -38,8 +39,12 @@ setup(name='pyqpbo',
       description='QPBO interface and alpha expansion for Python',
       url="http://pystruct.github.io",
       cmdclass={"build_ext": QPBOInstall},
-      ext_modules=[
-          Extension('pyqpbo.pyqpbo', sources=files, language='c++',
+#       ext_modules = cythonize('src/pyqpbo.pyx', language="c++")
+#       )
+      ext_modules=cythonize(
+          [Extension('pyqpbo.pyqpbo', sources=files, language='c++',
                     include_dirs=[qpbo_directory, np.get_include()],
                     library_dirs=[qpbo_directory],
-                    extra_compile_args=["-fpermissive"])])
+                    extra_compile_args=["-fpermissive"])
+          ])
+      )
