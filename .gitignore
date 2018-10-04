@@ -106,3 +106,6 @@ experiments/noise.npy
 
 testdata/
 .pytest_cache/
+
+QPBO-v1.4.src*
+src/pyqpbo.cpp
