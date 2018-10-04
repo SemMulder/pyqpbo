@@ -6,10 +6,11 @@
 #
 # More infos on my blog: peekaboo-vision.blogspot.com
 
+cimport cython
+
 import numpy as np
 cimport numpy as np
 from libcpp cimport bool
-from time import time
 
 np.import_array()
 
@@ -31,6 +32,7 @@ cdef extern from "QPBO.h":
                                REAL E11)
         void AddPairwiseTerm(EdgeId e, NodeId i, NodeId j, REAL E00, REAL E01,
                              REAL E10, REAL E11)
+        void MergeParallelEdges()
         int GetLabel(NodeId i)
         void Solve()
         void ComputeWeakPersistencies()
@@ -52,12 +54,16 @@ cdef class QPBOFloat:
     def add_nodes(self, int num):
         return self._qpbo.AddNode(num)
 
+    @cython.boundscheck(False)
+    @cython.wraparound(False)
     def add_unary_terms(self,
                         np.ndarray[np.int32_t, ndim=1, mode='c'] node_ids,
                         np.ndarray[np.float32_t, ndim=2, mode='c'] weights):
         for i in xrange(node_ids.shape[0]):
             self._qpbo.AddUnaryTerm(node_ids[i], weights[i, 0], weights[i, 1])
 
+    @cython.boundscheck(False)
+    @cython.wraparound(False)
     def add_pairwise_terms(self,
                            np.ndarray[np.int32_t, ndim=2, mode='c'] node_ids,
                            np.ndarray[np.float32_t, ndim=3, mode='c'] weights):
@@ -68,12 +74,17 @@ cdef class QPBOFloat:
                 weights[i, 1, 0], weights[i, 1, 1]
             )
 
+    def merge_parallel_edges(self):
+        self._qpbo.MergeParallelEdges()
+
     def solve(self):
         self._qpbo.Solve()
 
     def compute_weak_persistencies(self):
         self._qpbo.ComputeWeakPersistencies()
 
+    @cython.boundscheck(False)
+    @cython.wraparound(False)
     def get_labels(self, np.ndarray[np.int32_t, ndim=1, mode='c'] node_ids):
         cdef np.npy_intp result_shape[1]
         result_shape[0] = node_ids.shape[0]
