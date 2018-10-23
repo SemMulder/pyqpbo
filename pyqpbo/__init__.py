@@ -1,3 +1,3 @@
 from .pyqpbo import *
 
-__all__ = ['QPBOFloat']
+__all__ = ['QPBODouble', 'QPBOFloat']
